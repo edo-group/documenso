@@ -121,3 +121,55 @@ export const hasOverlappingFields = <T extends OverlapFieldInput>(
 ): boolean => {
   return getOverlappingFieldPairs(fields, threshold).length > 0;
 };
+
+/**
+ * The overlap ratio above which two fields of the same type, for the same recipient,
+ * are treated as the same field rather than two deliberately placed ones.
+ *
+ * Set high so that fields a sender has intentionally placed close together are not
+ * mistaken for duplicates.
+ */
+export const FIELD_DUPLICATE_THRESHOLD = 0.9;
+
+/**
+ * Finds an existing field that a candidate would effectively duplicate.
+ *
+ * Only fields of the same type, for the same recipient, on the same page of the same
+ * envelope item are considered, and only when they cover each other almost entirely.
+ * Such a pair is indistinguishable to a signer: only the field on top can be clicked,
+ * so the one underneath can never be filled in and the envelope can never complete.
+ *
+ * @param fields The existing fields. Positional values must be percentages (0-100).
+ * @param candidate The field about to be created.
+ * @param threshold The minimum overlap ratio (0-1). Defaults to {@link FIELD_DUPLICATE_THRESHOLD}.
+ */
+export const findDuplicateField = <T extends OverlapFieldInput & { recipientId: number; type: string }>(
+  fields: T[],
+  candidate: OverlapFieldInput & { recipientId: number; type: string },
+  threshold: number = FIELD_DUPLICATE_THRESHOLD,
+): T | undefined => {
+  const candidateArea = candidate.width * candidate.height;
+
+  if (candidateArea <= 0) {
+    return undefined;
+  }
+
+  return fields.find((field) => {
+    if (
+      field.recipientId !== candidate.recipientId ||
+      field.type !== candidate.type ||
+      field.envelopeItemId !== candidate.envelopeItemId ||
+      field.page !== candidate.page
+    ) {
+      return false;
+    }
+
+    const fieldArea = field.width * field.height;
+
+    if (fieldArea <= 0) {
+      return false;
+    }
+
+    return getIntersectionArea(field, candidate) / Math.min(fieldArea, candidateArea) >= threshold;
+  });
+};
