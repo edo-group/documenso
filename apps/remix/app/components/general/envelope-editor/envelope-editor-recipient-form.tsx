@@ -516,13 +516,21 @@ export const EnvelopeEditorRecipientForm = () => {
     // with no signing order. If they come to this page it will show an error
     // since they aren't equal and the recipient is no longer editable.
     const envelopeRecipients = data.signers.map((recipient) => {
+      // Send the local id along so the server can say which saved recipient is
+      // which. A recipient that has not been saved yet has no id, and without
+      // this the next save would create a second copy of them.
+      const withClientId = {
+        ...recipient,
+        clientId: recipient.formId,
+      };
+
       if (!canRecipientBeModified(recipient.id)) {
         return {
-          ...recipient,
+          ...withClientId,
           signingOrder: recipient.signingOrder,
         };
       }
-      return recipient;
+      return withClientId;
     });
 
     const hasSigningOrderChanged = envelope.documentMeta.signingOrder !== data.signingOrder;

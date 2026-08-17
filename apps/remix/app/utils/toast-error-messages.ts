@@ -19,13 +19,22 @@ export const FAIR_USE_LIMIT_EXCEEDED_ERROR_MESSAGE = {
 };
 
 export const getDistributeErrorMessage = (code: string): ToastMessageDescriptor => {
-  return match(code)
-    .with('RECIPIENT_LIMIT_EXCEEDED', () => RECIPIENT_LIMIT_EXCEEDED_ERROR_MESSAGE)
-    .with(AppErrorCode.TOO_MANY_REQUESTS, () => FAIR_USE_LIMIT_EXCEEDED_ERROR_MESSAGE)
-    .otherwise(() => ({
-      title: msg`Something went wrong`,
-      description: msg`An error occurred while distributing the document.`,
-    }));
+  return (
+    match(code)
+      .with('RECIPIENT_LIMIT_EXCEEDED', () => RECIPIENT_LIMIT_EXCEEDED_ERROR_MESSAGE)
+      .with(AppErrorCode.TOO_MANY_REQUESTS, () => FAIR_USE_LIMIT_EXCEEDED_ERROR_MESSAGE)
+      // The server rejects an envelope it cannot send with a message naming what
+      // is wrong and who it concerns. The caller shows that in place of the
+      // description below, so this only has to cover the title.
+      .with(AppErrorCode.INVALID_REQUEST, () => ({
+        title: msg`This envelope cannot be sent yet`,
+        description: msg`An error occurred while distributing the document.`,
+      }))
+      .otherwise(() => ({
+        title: msg`Something went wrong`,
+        description: msg`An error occurred while distributing the document.`,
+      }))
+  );
 };
 
 export const getDirectTemplateErrorMessage = (code: string): ToastMessageDescriptor => {

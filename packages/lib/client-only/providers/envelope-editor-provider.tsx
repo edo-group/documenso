@@ -5,6 +5,7 @@ import {
   type EnvelopeEditorConfig,
   type TEditorEnvelope,
 } from '@documenso/lib/types/envelope-editor';
+import { getRecipientIdAssignments } from '@documenso/lib/utils/recipients';
 import { trpc } from '@documenso/trpc/react';
 import type { TSetEnvelopeFieldsResponse } from '@documenso/trpc/server/envelope-router/set-envelope-fields.types';
 import type { TSetEnvelopeRecipientsRequest } from '@documenso/trpc/server/envelope-router/set-envelope-recipients.types';
@@ -200,6 +201,16 @@ export const EnvelopeEditorProvider = ({
         });
 
         recipients = response.data;
+
+        // Insert the IDs into the local recipients, the same way we do for
+        // fields below. A recipient the editor has just created still has no
+        // id, and the server matches on id alone, so without this the next
+        // save creates a second copy of the same person.
+        const assignments = getRecipientIdAssignments(editorRecipients.form.getValues().signers, response.data);
+
+        assignments.forEach(({ index, id }) => {
+          editorRecipients.form.setValue(`signers.${index}.id`, id);
+        });
       } else {
         recipients = mapLocalRecipientsToRecipients({ envelope, localRecipients });
       }

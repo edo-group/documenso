@@ -113,6 +113,43 @@ export const isRecipientEmailValidForSending = (recipient: Pick<TRecipientLite, 
 };
 
 /**
+ * Works out which saved recipient belongs to which row the editor sent, so the
+ * editor can store the id each new recipient was given.
+ *
+ * A recipient the editor has just created has no id yet, and the server matches
+ * recipients on id alone. A row that never learns its id therefore looks new on
+ * every save, and the server creates the same person again each time.
+ *
+ * Pairing is done on the local id the server echoes back, not on the email: the
+ * same person can deliberately appear on an envelope more than once, so an
+ * email identifies nobody in particular.
+ *
+ * @param localRecipients The recipients as the editor currently holds them.
+ * @param savedRecipients The recipients returned by the server.
+ * @returns The index of each row that has just learned its id.
+ */
+export const getRecipientIdAssignments = <T extends { formId: string; id?: number }>(
+  localRecipients: T[],
+  savedRecipients: { id: number; clientId?: string | null }[],
+): { index: number; id: number }[] => {
+  const assignments: { index: number; id: number }[] = [];
+
+  for (const savedRecipient of savedRecipients) {
+    if (!savedRecipient.clientId) {
+      continue;
+    }
+
+    const index = localRecipients.findIndex((localRecipient) => localRecipient.formId === savedRecipient.clientId);
+
+    if (index !== -1 && !localRecipients[index].id) {
+      assignments.push({ index, id: savedRecipient.id });
+    }
+  }
+
+  return assignments;
+};
+
+/**
  * Whether the recipient's signing window has expired.
  */
 export const isRecipientExpired = (recipient: { expiresAt: Date | null }) => {

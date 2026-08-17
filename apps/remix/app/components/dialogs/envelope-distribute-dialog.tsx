@@ -1,7 +1,7 @@
 import { useCurrentEnvelopeEditor } from '@documenso/lib/client-only/providers/envelope-editor-provider';
 import { useCurrentOrganisation } from '@documenso/lib/client-only/providers/organisation';
 import { DO_NOT_INVALIDATE_QUERY_ON_MUTATION } from '@documenso/lib/constants/trpc';
-import { AppError } from '@documenso/lib/errors/app-error';
+import { AppError, AppErrorCode } from '@documenso/lib/errors/app-error';
 import { extractDocumentAuthMethods } from '@documenso/lib/utils/document-auth';
 import { hasOverlappingFields } from '@documenso/lib/utils/fields-overlap';
 import { getRecipientsWithMissingFields } from '@documenso/lib/utils/recipients';
@@ -202,9 +202,16 @@ export const EnvelopeDistributeDialog = ({
 
       const errorMessage = getDistributeErrorMessage(error.code);
 
+      // When the envelope fails validation the server says exactly what is
+      // wrong and names the recipients it means. Showing "something went wrong"
+      // instead leaves the sender with nothing to act on, which is the one
+      // thing they need here.
+      const description =
+        error.code === AppErrorCode.INVALID_REQUEST && error.message ? error.message : i18n._(errorMessage.description);
+
       toast({
         title: i18n._(errorMessage.title),
-        description: i18n._(errorMessage.description),
+        description,
         variant: 'destructive',
         duration: 7500,
       });

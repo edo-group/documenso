@@ -5,6 +5,14 @@ import { z } from 'zod';
 
 export const ZSetEnvelopeRecipientSchema = z.object({
   id: z.number().optional(),
+  /**
+   * The editor's local identifier for a recipient that has not been saved yet.
+   *
+   * Echoed back on the response so the editor can attach the id it was given.
+   * Without it the editor keeps sending the same recipient with no id, and each
+   * save creates another copy of them.
+   */
+  clientId: z.string().optional(),
   email: ZRecipientEmailSchema,
   name: z.string().max(255),
   role: z.nativeEnum(RecipientRole),
@@ -22,7 +30,11 @@ export const ZSetEnvelopeRecipientsResponseSchema = z.object({
   data: ZRecipientLiteSchema.omit({
     documentId: true,
     templateId: true,
-  }).array(),
+  })
+    .extend({
+      clientId: z.string().nullish(),
+    })
+    .array(),
 });
 
 export type TSetEnvelopeRecipientsRequest = z.infer<typeof ZSetEnvelopeRecipientsRequestSchema>;
