@@ -35,9 +35,7 @@ describe('getOverlappingFieldPairs', () => {
 
   it('ignores fields on a different page or envelope item', () => {
     expect(getOverlappingFieldPairs([field({ id: 1 }), field({ id: 2, page: 3 })])).toHaveLength(0);
-    expect(
-      getOverlappingFieldPairs([field({ id: 1 }), field({ id: 2, envelopeItemId: 'item-2' })]),
-    ).toHaveLength(0);
+    expect(getOverlappingFieldPairs([field({ id: 1 }), field({ id: 2, envelopeItemId: 'item-2' })])).toHaveLength(0);
   });
 
   it('measures the ratio against the smaller field', () => {
@@ -94,5 +92,14 @@ describe('findDuplicateField', () => {
   it('ignores fields with no area', () => {
     expect(findDuplicateField([field({ id: 1 })], field({ id: 2, width: 0 }))).toBeUndefined();
     expect(findDuplicateField([field({ id: 1, height: 0 })], field({ id: 2 }))).toBeUndefined();
+  });
+
+  it('works on editor fields, which have no id until they are saved', () => {
+    // The editor calls this while placing a field, before it has been persisted,
+    // so the only identifier it carries is the client-side formId.
+    const existing = { ...base(), id: undefined, formId: 'a' };
+    const candidate = { ...base(), id: undefined, formId: 'b' };
+
+    expect(findDuplicateField([existing], candidate)).toBe(existing);
   });
 });
