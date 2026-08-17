@@ -4,6 +4,7 @@ export function useEnvelopeAutosave<T>(saveFn: (data: T) => Promise<void>, delay
   const timeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const lastArgsRef = useRef<T | null>(null);
   const pendingPromiseRef = useRef<Promise<void> | null>(null);
+  const isFlushingRef = useRef(false);
 
   const [isPending, setIsPending] = useState(false);
   const [isCommiting, setIsCommiting] = useState(false);
@@ -36,6 +37,15 @@ export function useEnvelopeAutosave<T>(saveFn: (data: T) => Promise<void>, delay
         // before sending anything else.
         if (pendingPromiseRef.current) {
           await pendingPromiseRef.current.catch(() => undefined);
+
+          // A flush is seeing this through, and it clears the queue itself.
+          // Re-arming here would put a save back on the clock after the caller
+          // believed everything was settled, which for the send flow means a
+          // save landing after the envelope has already gone out.
+          if (isFlushingRef.current) {
+            timeoutRef.current = null;
+            return;
+          }
 
           if (lastArgsRef.current) {
             triggerSaveRef.current(lastArgsRef.current);
@@ -77,26 +87,40 @@ export function useEnvelopeAutosave<T>(saveFn: (data: T) => Promise<void>, delay
       timeoutRef.current = null;
     }
 
-    if (pendingPromiseRef.current) {
-      // Already running → wait for it
-      await pendingPromiseRef.current;
-      return;
-    }
+    isFlushingRef.current = true;
 
-    if (lastArgsRef.current) {
-      const args = lastArgsRef.current;
-      lastArgsRef.current = null;
+    try {
+      if (pendingPromiseRef.current) {
+        await pendingPromiseRef.current.catch(() => undefined);
+      }
 
-      setIsCommiting(true);
-      setIsPending(true);
+      // Anything changed while that save was running still has to be saved.
+      // Returning here instead would lose the most recent edit, which for a
+      // flush before sending means sending the document without it.
+      if (lastArgsRef.current) {
+        const args = lastArgsRef.current;
+        lastArgsRef.current = null;
 
-      pendingPromiseRef.current = saveFn(args);
-      try {
-        await pendingPromiseRef.current;
-      } finally {
-        // eslint-disable-next-line require-atomic-updates
-        pendingPromiseRef.current = null;
-        setIsCommiting(false);
+        setIsCommiting(true);
+        setIsPending(true);
+
+        pendingPromiseRef.current = saveFn(args);
+        try {
+          await pendingPromiseRef.current;
+        } finally {
+          // eslint-disable-next-line require-atomic-updates
+          pendingPromiseRef.current = null;
+          setIsCommiting(false);
+          setIsPending(false);
+        }
+      }
+    } finally {
+      isFlushingRef.current = false;
+
+      // A flush settles everything, so nothing should still be reported as
+      // waiting to save. Without this a save that was cut short while waiting
+      // its turn can leave the indicator saying it is still saving forever.
+      if (!lastArgsRef.current && !pendingPromiseRef.current) {
         setIsPending(false);
       }
     }

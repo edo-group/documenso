@@ -271,7 +271,7 @@ export const EnvelopeEditorProvider = ({
     triggerSave: setFieldsDebounced,
     flush: flushSetFields,
     isPending: isFieldsMutationPending,
-  } = useEnvelopeAutosave(async (debouncedFields: TLocalField[]) => {
+  } = useEnvelopeAutosave<TLocalField[]>(async () => {
     try {
       let fields: TSetEnvelopeFieldsResponse['data'] = [];
 
@@ -279,7 +279,7 @@ export const EnvelopeEditorProvider = ({
       // was queued. A save that was waiting its turn was queued before the one
       // ahead of it returned, so its copy still has no ids on the fields that
       // were just created, and sending that would create them a second time.
-      const localFields = editorFields.getLatestFields() ?? debouncedFields;
+      const localFields = editorFields.getLatestFields();
 
       if (!isEmbedded) {
         const response = await setFieldsMutation.mutateAsync({

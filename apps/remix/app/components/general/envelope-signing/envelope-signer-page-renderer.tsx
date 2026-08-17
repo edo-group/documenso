@@ -85,16 +85,21 @@ export const EnvelopeSignerPageRenderer = ({ pageData }: { pageData: PageRenderD
 
   const cachedRenderFields = useRef<Map<number, Field & { signature?: Signature | null }>>(new Map());
 
-  const fieldActivatorCleanups = useRef<(() => void)[]>([]);
+  // Keyed by field so redrawing a field replaces its registration rather than
+  // stacking another one. Fields are redrawn on every change, so a list would
+  // keep growing for as long as the page is open.
+  const fieldActivatorCleanups = useRef(new Map<number, () => void>());
 
-  // Drop the registrations when this page goes away, so the panel never offers
-  // to fill in a field that is no longer drawn.
+  // Drop the registrations when this page goes away, so nothing offers to fill
+  // in a field that is no longer drawn.
   useEffect(() => {
+    const cleanups = fieldActivatorCleanups.current;
+
     return () => {
-      fieldActivatorCleanups.current.forEach((cleanup) => {
+      cleanups.forEach((cleanup) => {
         cleanup();
       });
-      fieldActivatorCleanups.current = [];
+      cleanups.clear();
     };
   }, []);
   const prevShowPendingFieldTooltip = useRef(showPendingFieldTooltip);
@@ -433,6 +438,8 @@ export const EnvelopeSignerPageRenderer = ({ pageData }: { pageData: PageRenderD
     // Let the field's own label fill it in, so the signer has a target they can
     // actually hit rather than a few millimetres of canvas.
     if (canFieldBeActivatedFromTooltip(unparsedField.type)) {
+      fieldActivatorCleanups.current.get(unparsedField.id)?.();
+
       const unregister = registerFieldActivator(unparsedField.id, () => {
         handleFieldGroupClick({
           currentTarget: fieldGroup,
@@ -440,7 +447,7 @@ export const EnvelopeSignerPageRenderer = ({ pageData }: { pageData: PageRenderD
         } as unknown as KonvaEventObject<Event>);
       });
 
-      fieldActivatorCleanups.current.push(unregister);
+      fieldActivatorCleanups.current.set(unparsedField.id, unregister);
     }
   };
 
