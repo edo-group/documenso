@@ -57,6 +57,13 @@ type UseEditorFieldsResponse = {
 
   // Field utilities
   getFieldByFormId: (formId: string) => TLocalField | undefined;
+  /**
+   * The fields as they are right now, rather than as of the render that asked.
+   *
+   * A save that was queued while another was in flight holds a copy from before
+   * the ids came back, and sending that would create those fields again.
+   */
+  getLatestFields: () => TLocalField[];
   getFieldsByRecipient: (recipientId: number) => TLocalField[];
 
   // Selected recipient
@@ -259,6 +266,10 @@ export const useEditorFields = ({ envelope, handleFieldsUpdate }: EditorFieldsPr
     [append, triggerFieldsUpdate],
   );
 
+  const getLatestFields = useCallback((): TLocalField[] => {
+    return form.getValues().fields;
+  }, [form]);
+
   const getFieldByFormId = useCallback(
     (formId: string): TLocalField | undefined => {
       return localFields.find((field) => field.formId === formId) as TLocalField | undefined;
@@ -314,6 +325,7 @@ export const useEditorFields = ({ envelope, handleFieldsUpdate }: EditorFieldsPr
     // Field utilities
     getFieldByFormId,
     getFieldsByRecipient,
+    getLatestFields,
 
     // Selected field
     selectedField,

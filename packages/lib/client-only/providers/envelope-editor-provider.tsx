@@ -189,9 +189,25 @@ export const EnvelopeEditorProvider = ({
     triggerSave: setRecipientsDebounced,
     flush: flushSetRecipients,
     isPending: isRecipientsMutationPending,
-  } = useEnvelopeAutosave(async (localRecipients: TSetEnvelopeRecipientsRequest['recipients']) => {
+  } = useEnvelopeAutosave(async (queuedRecipients: TSetEnvelopeRecipientsRequest['recipients']) => {
     try {
       let recipients: TEditorEnvelope['recipients'] = [];
+
+      // Pick up any ids that arrived while this save was waiting its turn. The
+      // payload was built before the save ahead of it returned, so a recipient
+      // created by that save still looks new here, and sending it again would
+      // create a second copy of the same person.
+      const signers = editorRecipients.form.getValues().signers;
+
+      const localRecipients = queuedRecipients.map((recipient) => {
+        if (recipient.id || !recipient.clientId) {
+          return recipient;
+        }
+
+        const saved = signers.find((signer) => signer.formId === recipient.clientId);
+
+        return saved?.id ? { ...recipient, id: saved.id } : recipient;
+      });
 
       if (!isEmbedded) {
         const response = await setRecipientsMutation.mutateAsync({
@@ -255,9 +271,15 @@ export const EnvelopeEditorProvider = ({
     triggerSave: setFieldsDebounced,
     flush: flushSetFields,
     isPending: isFieldsMutationPending,
-  } = useEnvelopeAutosave(async (localFields: TLocalField[]) => {
+  } = useEnvelopeAutosave(async (debouncedFields: TLocalField[]) => {
     try {
       let fields: TSetEnvelopeFieldsResponse['data'] = [];
+
+      // Read the fields as they are now rather than as they were when the save
+      // was queued. A save that was waiting its turn was queued before the one
+      // ahead of it returned, so its copy still has no ids on the fields that
+      // were just created, and sending that would create them a second time.
+      const localFields = editorFields.getLatestFields() ?? debouncedFields;
 
       if (!isEmbedded) {
         const response = await setFieldsMutation.mutateAsync({
