@@ -16,7 +16,7 @@ import {
 import { createSpinner } from '@documenso/lib/universal/field-renderer/field-generic-items';
 import { renderField } from '@documenso/lib/universal/field-renderer/render-field';
 import { isFieldUnsignedAndRequired } from '@documenso/lib/utils/advanced-fields-helpers';
-import { getClientSideFieldTranslations } from '@documenso/lib/utils/fields';
+import { canFieldBeActivatedFromTooltip, getClientSideFieldTranslations } from '@documenso/lib/utils/fields';
 import { extractInitials } from '@documenso/lib/utils/recipient-formatter';
 import type { TSignEnvelopeFieldValue } from '@documenso/trpc/server/envelope-router/sign-envelope-field.types';
 import { EnvelopeRecipientFieldTooltip } from '@documenso/ui/components/document/envelope-recipient-field-tooltip';
@@ -48,7 +48,7 @@ type GenericLocalField = TEnvelope['fields'][number] & {
 
 export const EnvelopeSignerPageRenderer = ({ pageData }: { pageData: PageRenderData }) => {
   const { t, i18n } = useLingui();
-  const { currentEnvelopeItem, setRenderError } = useCurrentEnvelopeRender();
+  const { currentEnvelopeItem, setRenderError, registerFieldActivator, activateField } = useCurrentEnvelopeRender();
   const { sessionData } = useOptionalSession();
 
   const { executeActionAuthProcedure } = useRequiredDocumentSigningAuthContext();
@@ -84,6 +84,19 @@ export const EnvelopeSignerPageRenderer = ({ pageData }: { pageData: PageRenderD
   }, [fullNameState, emailState, signatureState]);
 
   const cachedRenderFields = useRef<Map<number, Field & { signature?: Signature | null }>>(new Map());
+
+  const fieldActivatorCleanups = useRef<(() => void)[]>([]);
+
+  // Drop the registrations when this page goes away, so the panel never offers
+  // to fill in a field that is no longer drawn.
+  useEffect(() => {
+    return () => {
+      fieldActivatorCleanups.current.forEach((cleanup) => {
+        cleanup();
+      });
+      fieldActivatorCleanups.current = [];
+    };
+  }, []);
   const prevShowPendingFieldTooltip = useRef(showPendingFieldTooltip);
 
   const { onFieldSigned, onFieldUnsigned } = useEmbedSigningContext() || {};
@@ -416,6 +429,19 @@ export const EnvelopeSignerPageRenderer = ({ pageData }: { pageData: PageRenderD
 
     fieldGroup.off('pointerdown');
     fieldGroup.on('pointerdown', handleFieldGroupClick);
+
+    // Let the field's own label fill it in, so the signer has a target they can
+    // actually hit rather than a few millimetres of canvas.
+    if (canFieldBeActivatedFromTooltip(unparsedField.type)) {
+      const unregister = registerFieldActivator(unparsedField.id, () => {
+        handleFieldGroupClick({
+          currentTarget: fieldGroup,
+          target: fieldGroup,
+        } as unknown as KonvaEventObject<Event>);
+      });
+
+      fieldActivatorCleanups.current.push(unregister);
+    }
   };
 
   const renderFieldOnLayer = (
@@ -578,6 +604,11 @@ export const EnvelopeSignerPageRenderer = ({ pageData }: { pageData: PageRenderD
             key={recipientFieldsRemaining[0].id}
             field={recipientFieldsRemaining[0]}
             color="warning"
+            onActivate={
+              canFieldBeActivatedFromTooltip(recipientFieldsRemaining[0].type)
+                ? () => void activateField(recipientFieldsRemaining[0].id)
+                : undefined
+            }
           >
             <Trans>Click to insert field</Trans>
           </EnvelopeFieldToolTip>

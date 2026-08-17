@@ -4,7 +4,7 @@ import type { TRecipientColor } from '@documenso/ui/lib/recipient-colors';
 import { getRecipientColor } from '@documenso/ui/lib/recipient-colors';
 import type { Field, Recipient } from '@prisma/client';
 import type React from 'react';
-import { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react';
+import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
 
 import type { TEnvelope } from '../../types/envelope';
 import type { FieldRenderMode } from '../../universal/field-renderer/field-renderer';
@@ -67,6 +67,27 @@ type EnvelopeRenderProviderValue = {
   renderError: boolean;
   setRenderError: (renderError: boolean) => void;
   overrideSettings?: EnvelopeRenderOverrideSettings;
+
+  /**
+   * Lets the page renderer offer a way to fill in a field from outside the page.
+   *
+   * Fields are drawn on a canvas, so the only way to fill one in is to click it
+   * where it sits. On a phone that target is a few millimetres wide and sits
+   * behind the signing panel, which leaves the signer stuck on a document that
+   * tells them to click something they cannot see. Registering the field here
+   * lets the panel offer the same action as a button.
+   *
+   * Returns a function that removes the registration again.
+   */
+  registerFieldActivator: (fieldId: number, activate: () => void) => () => void;
+
+  /**
+   * Fills in a field as though the signer had clicked it.
+   *
+   * Returns false if the field is not on screen to be filled in, in which case
+   * the caller should take the signer to it instead.
+   */
+  activateField: (fieldId: number) => boolean;
 };
 
 interface EnvelopeRenderProviderProps {
@@ -220,6 +241,35 @@ export const EnvelopeRenderProvider = ({
     [recipientIds],
   );
 
+  // Held in a ref rather than state: registering a field is bookkeeping for the
+  // page that is currently drawn, and re-rendering everything each time a field
+  // appears or goes away would be wasteful and would fight the canvas.
+  const fieldActivators = useRef(new Map<number, () => void>());
+
+  const registerFieldActivator = useCallback((fieldId: number, activate: () => void) => {
+    fieldActivators.current.set(fieldId, activate);
+
+    return () => {
+      // Only remove our own entry. The field may have been drawn again by
+      // another page in the meantime, and that registration is the live one.
+      if (fieldActivators.current.get(fieldId) === activate) {
+        fieldActivators.current.delete(fieldId);
+      }
+    };
+  }, []);
+
+  const activateField = useCallback((fieldId: number) => {
+    const activate = fieldActivators.current.get(fieldId);
+
+    if (!activate) {
+      return false;
+    }
+
+    activate();
+
+    return true;
+  }, []);
+
   return (
     <EnvelopeRenderContext.Provider
       value={{
@@ -236,6 +286,8 @@ export const EnvelopeRenderProvider = ({
         renderError,
         setRenderError,
         overrideSettings,
+        registerFieldActivator,
+        activateField,
       }}
     >
       {children}

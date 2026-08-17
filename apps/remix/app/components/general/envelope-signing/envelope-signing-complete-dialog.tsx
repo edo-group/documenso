@@ -68,6 +68,22 @@ export const EnvelopeSignerCompleteDialog = () => {
         const fieldTooltip = document.querySelector(`#field-tooltip`);
 
         if (fieldTooltip) {
+          // On a phone the signing panel covers the lower half of the screen,
+          // and the middle of the screen is behind it. Centring the field there
+          // scrolled it out of sight and reach, which read as the button doing
+          // nothing at all.
+          //
+          // Growing the field's scroll area downwards by the height of the panel
+          // means centring that taller box leaves the field itself centred in
+          // what is actually visible. The panel is not rendered on desktop, so
+          // this measures zero there and the behaviour is unchanged.
+          if (fieldTooltip instanceof HTMLElement) {
+            const signingWidget = document.querySelector('[data-signing-widget]');
+            const obstructedHeight = signingWidget?.getBoundingClientRect().height ?? 0;
+
+            fieldTooltip.style.scrollMarginBottom = `${obstructedHeight}px`;
+          }
+
           fieldTooltip.scrollIntoView({ behavior: 'smooth', block: 'center' });
         } else {
           // Tooltip not in DOM (page virtualized away) — signal the PDF viewer

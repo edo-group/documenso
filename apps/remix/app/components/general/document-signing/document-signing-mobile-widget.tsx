@@ -31,7 +31,12 @@ export const DocumentSigningMobileWidget = () => {
   }, []);
 
   return (
-    <div className="pointer-events-none fixed right-0 bottom-0 left-0 z-50 flex justify-center px-2 pb-2 sm:px-4 sm:pb-6">
+    <div
+      // Marks the area of the screen this panel covers, so scrolling to a field
+      // can keep it above the panel rather than underneath it.
+      data-signing-widget
+      className="pointer-events-none fixed right-0 bottom-0 left-0 z-50 flex justify-center px-2 pb-2 sm:px-4 sm:pb-6"
+    >
       <div className="pointer-events-auto w-full max-w-[760px]">
         <div className="overflow-hidden rounded-xl border border-border bg-card shadow-2xl">
           {/* Main Header Bar */}

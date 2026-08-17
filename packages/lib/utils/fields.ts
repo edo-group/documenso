@@ -117,6 +117,17 @@ export const toRadioCustomText = (value: number): string => {
   return value.toString();
 };
 
+/**
+ * Whether a field can be filled in by pressing its label rather than the field.
+ *
+ * Every field type is one action, apart from checkboxes and radio groups, where
+ * the press has to say which option was chosen. A label sitting above the field
+ * cannot answer that, so those two are left to be filled in on the field itself.
+ */
+export const canFieldBeActivatedFromTooltip = (type: FieldType): boolean => {
+  return type !== FieldType.CHECKBOX && type !== FieldType.RADIO;
+};
+
 export const getClientSideFieldTranslations = ({ t }: I18n): Record<FieldType, string> => {
   return {
     [FieldType.TEXT]: t(msg`Text`),

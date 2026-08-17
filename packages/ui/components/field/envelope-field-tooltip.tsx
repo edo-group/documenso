@@ -25,12 +25,28 @@ interface EnvelopeFieldToolTipProps extends VariantProps<typeof tooltipVariants>
   children: React.ReactNode;
   className?: string;
   field: Pick<Field, 'id' | 'inserted' | 'fieldMeta' | 'positionX' | 'positionY' | 'width' | 'height' | 'page'>;
+
+  /**
+   * Called when the signer presses the tooltip.
+   *
+   * The tooltip tells the signer to click the field, so it should be one of the
+   * things they can click. The field itself is drawn on a canvas and can be
+   * only a few millimetres tall on a phone, which leaves the label the larger
+   * and more obvious target of the two.
+   */
+  onActivate?: () => void;
 }
 
 /**
  * Renders a tooltip for a given field.
  */
-export function EnvelopeFieldToolTip({ children, color, className = '', field }: EnvelopeFieldToolTipProps) {
+export function EnvelopeFieldToolTip({
+  children,
+  color,
+  className = '',
+  field,
+  onActivate,
+}: EnvelopeFieldToolTipProps) {
   const [coords, setCoords] = useState({
     x: 0,
     y: 0,
@@ -98,6 +114,9 @@ export function EnvelopeFieldToolTip({ children, color, className = '', field }:
   return (
     <div
       id="field-tooltip"
+      // Stays click-through: this sits directly on top of the field, and the
+      // field is drawn on a canvas underneath. The label itself is rendered in
+      // a portal elsewhere in the page, so it can still be pressed.
       className={cn('pointer-events-none absolute')}
       style={{
         top: `${coords.y}px`,
@@ -110,7 +129,14 @@ export function EnvelopeFieldToolTip({ children, color, className = '', field }:
         <Tooltip delayDuration={0} open={!field.inserted || !field.fieldMeta}>
           <TooltipTrigger className="absolute inset-0 w-full"></TooltipTrigger>
 
-          <TooltipContent className={tooltipVariants({ color, className: cn(className, 'z-40') })} sideOffset={2}>
+          <TooltipContent
+            className={tooltipVariants({
+              color,
+              className: cn(className, 'z-40', onActivate && 'cursor-pointer select-none'),
+            })}
+            sideOffset={2}
+            onClick={onActivate}
+          >
             {children}
             <TooltipArrow />
           </TooltipContent>
