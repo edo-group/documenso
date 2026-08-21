@@ -38,6 +38,14 @@ export const ZSignUpSchema = z.object({
   password: ZPasswordSchema,
   signature: z.string().nullish(),
   captchaToken: z.string().trim().optional(),
+  /**
+   * The token from an organisation invitation link.
+   *
+   * Present only when someone arrived here from an invitation. It is what
+   * allows a signup while public registration is closed, so the server checks
+   * it against the invited address rather than trusting its presence.
+   */
+  inviteToken: z.string().trim().min(1).optional(),
 });
 
 export type TSignUpSchema = z.infer<typeof ZSignUpSchema>;

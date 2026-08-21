@@ -14,6 +14,8 @@ import { setupTwoFactorAuthentication } from '@documenso/lib/server-only/2fa/set
 import { validateTwoFactorAuthentication } from '@documenso/lib/server-only/2fa/validate-2fa';
 import { viewBackupCodes } from '@documenso/lib/server-only/2fa/view-backup-codes';
 import { verifyCaptchaToken } from '@documenso/lib/server-only/captcha/verify-captcha';
+import { acceptOrganisationInvitation } from '@documenso/lib/server-only/organisation/accept-organisation-invitation';
+import { getInviteForSignup } from '@documenso/lib/server-only/organisation/get-invite-for-signup';
 import { rateLimitResponse } from '@documenso/lib/server-only/rate-limit/rate-limit-middleware';
 import {
   forgotPasswordRateLimit,
@@ -33,6 +35,7 @@ import { deletedServiceAccountEmail } from '@documenso/lib/server-only/user/serv
 import { legacyServiceAccountEmail } from '@documenso/lib/server-only/user/service-accounts/legacy-service-account';
 import { updatePassword } from '@documenso/lib/server-only/user/update-password';
 import { verifyEmail } from '@documenso/lib/server-only/user/verify-email';
+import { isInvitedSignup, isSignupAllowed } from '@documenso/lib/utils/invited-signup';
 import { prisma } from '@documenso/prisma';
 import { sValidator } from '@hono/standard-validator';
 import { compare } from '@node-rs/bcrypt';
@@ -191,14 +194,11 @@ export const emailPasswordRoute = new Hono<HonoAuthContext>()
   .post('/signup', sValidator('json', ZSignUpSchema), async (c) => {
     const requestMetadata = c.get('requestMetadata');
 
-    if (!isSignupEnabledForProvider('email')) {
-      throw new AppError(AuthenticationErrorCode.SignupDisabled, {
-        statusCode: 400,
-      });
-    }
+    const { name, email, password, signature, captchaToken, inviteToken } = c.req.valid('json');
 
-    const { name, email, password, signature, captchaToken } = c.req.valid('json');
-
+    // Rate limited before the invite is looked up, not after. Checking the
+    // token means a database read, and this endpoint is open to anyone, so
+    // doing that first would let someone guess tokens as fast as they can post.
     const signupLimitResult = await signupRateLimit.check({
       ip: requestMetadata.ipAddress ?? 'unknown',
     });
@@ -208,6 +208,19 @@ export const emailPasswordRoute = new Hono<HonoAuthContext>()
     if (signupLimited) {
       throw new HTTPException(429, {
         res: signupLimited,
+      });
+    }
+
+    // Closing public registration also closed the only door an invited person
+    // has: the invite page sends someone without an account to `/signup`, and
+    // that page is exactly what the flag turns off. So a real, still-pending
+    // invitation for this very address is allowed through. The address must
+    // match, otherwise one leaked token would open registration to anyone.
+    const invite = await getInviteForSignup({ token: inviteToken });
+
+    if (!isSignupAllowed({ isEmailSignupEnabled: isSignupEnabledForProvider('email'), invite, email })) {
+      throw new AppError(AuthenticationErrorCode.SignupDisabled, {
+        statusCode: 400,
       });
     }
 
@@ -234,6 +247,21 @@ export const emailPasswordRoute = new Hono<HonoAuthContext>()
       console.error(err);
       throw err;
     });
+
+    // Accept the invitation here rather than making them walk back to the link
+    // they came from. Membership is only ever created by visiting that page, so
+    // without this the account exists and still belongs to no organisation:
+    // the same dead end one step further along.
+    //
+    // Deliberately not fatal. The account has been created by this point, so
+    // throwing would report a failed signup for one that actually succeeded,
+    // and a retry would then hit ALREADY_EXISTS. Their invitation link still
+    // works, and now that the user exists it accepts on sight.
+    if (inviteToken && isInvitedSignup({ invite, email })) {
+      await acceptOrganisationInvitation({ token: inviteToken }).catch((err) => {
+        console.error('Failed to accept organisation invitation during signup', err);
+      });
+    }
 
     await jobsClient.triggerJob({
       name: 'send.signup.confirmation.email',
