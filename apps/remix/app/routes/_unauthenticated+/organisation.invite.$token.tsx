@@ -58,6 +58,7 @@ export async function loader({ params, request }: Route.LoaderArgs) {
     return {
       state: 'LoginRequired',
       email: organisationMemberInvite.email,
+      token: organisationMemberInvite.token,
       organisationName: organisationMemberInvite.organisation.name,
     } as const;
   }
@@ -114,8 +115,14 @@ export default function AcceptInvitationPage({ loaderData }: Route.ComponentProp
           <Trans>To accept this invitation you must create an account.</Trans>
         </p>
 
+        {/*
+          The token travels to the signup page, which is what lets an invited
+          person register while public registration is closed. Without it the
+          button leads to a page that silently bounces to the login screen,
+          where they have no account and no way to guess why.
+        */}
         <Button asChild>
-          <Link to={`/signup#email=${encodeURIComponent(data.email)}`}>
+          <Link to={`/signup?inviteToken=${encodeURIComponent(data.token)}#email=${encodeURIComponent(data.email)}`}>
             <Trans>Create account</Trans>
           </Link>
         </Button>

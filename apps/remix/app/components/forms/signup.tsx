@@ -8,7 +8,15 @@ import { zEmail } from '@documenso/lib/utils/zod';
 import { ZPasswordSchema } from '@documenso/trpc/server/auth-router/schema';
 import { cn } from '@documenso/ui/lib/utils';
 import { Button } from '@documenso/ui/primitives/button';
-import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '@documenso/ui/primitives/form/form';
+import {
+  Form,
+  FormControl,
+  FormDescription,
+  FormField,
+  FormItem,
+  FormLabel,
+  FormMessage,
+} from '@documenso/ui/primitives/form/form';
 import { Input } from '@documenso/ui/primitives/input';
 import { PasswordInput } from '@documenso/ui/primitives/password-input';
 import { SignaturePadDialog } from '@documenso/ui/primitives/signature-pad/signature-pad-dialog';
@@ -64,6 +72,10 @@ export type SignUpFormProps = {
   isMicrosoftSignupEnabled?: boolean;
   isOidcSignupEnabled?: boolean;
   returnTo?: string;
+  /** Set when the visitor arrived from an organisation invitation link. */
+  inviteToken?: string | null;
+  /** The address that invitation was sent to, which is the only one it covers. */
+  invitedEmail?: string | null;
 };
 
 export const SignUpForm = ({
@@ -74,6 +86,8 @@ export const SignUpForm = ({
   isMicrosoftSignupEnabled,
   isOidcSignupEnabled,
   returnTo,
+  inviteToken,
+  invitedEmail,
 }: SignUpFormProps) => {
   const { _ } = useLingui();
   const { toast } = useToast();
@@ -92,7 +106,8 @@ export const SignUpForm = ({
   const form = useForm<TSignUpFormSchema>({
     values: {
       name: '',
-      email: initialEmail ?? '',
+      // An invitation decides the address; anything else is a suggestion.
+      email: invitedEmail ?? initialEmail ?? '',
       password: '',
       signature: '',
     },
@@ -126,6 +141,7 @@ export const SignUpForm = ({
         password,
         signature,
         captchaToken: token ?? undefined,
+        inviteToken: inviteToken ?? undefined,
       });
 
       await navigate(returnTo ? returnTo : '/unverified-account');
@@ -195,6 +211,12 @@ export const SignUpForm = ({
   };
 
   useEffect(() => {
+    // The invited address wins: it is the only one the server will accept, so
+    // letting a stale hash overwrite it would set up a refusal.
+    if (invitedEmail) {
+      return;
+    }
+
     const hash = window.location.hash.slice(1);
 
     const params = new URLSearchParams(hash);
@@ -204,7 +226,7 @@ export const SignUpForm = ({
     if (email) {
       form.setValue('email', email);
     }
-  }, [form]);
+  }, [form, invitedEmail]);
 
   return (
     <div className={cn('flex justify-center gap-x-12', className)}>
@@ -278,8 +300,19 @@ export const SignUpForm = ({
                           <Trans>Email Address</Trans>
                         </FormLabel>
                         <FormControl>
-                          <Input type="email" {...field} />
+                          {/*
+                            An invitation covers one address, so changing it
+                            here could only end in a refusal after the whole
+                            form was filled in. Locked, with the reason stated,
+                            rather than left open and rejected later.
+                          */}
+                          <Input type="email" readOnly={Boolean(invitedEmail)} {...field} />
                         </FormControl>
+                        {invitedEmail ? (
+                          <FormDescription>
+                            <Trans>This is the address your invitation was sent to.</Trans>
+                          </FormDescription>
+                        ) : null}
                         <FormMessage />
                       </FormItem>
                     )}
